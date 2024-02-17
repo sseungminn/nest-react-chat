@@ -1,39 +1,43 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Head, Table } from './waiting-room.styles';
-import { socket } from '../../App';
+// import { ws } from '../../App';
+import uuid from 'react-uuid';
 
-interface CreateRoomResponse {
-  success: boolean;
-  payload: string;
+interface User {
+  websocket: WebSocket;
+  id: string;
+  city: string | undefined;
+  country: string;
 }
+export const clientId = uuid();
 
 
 const WaitingRoom = () => {
+  const ws = new WebSocket('ws://localhost:8787');
   const [rooms, setRooms] = useState<string[]>([]);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const roomListHandler = (rooms: string[]) => {
-      setRooms(rooms);
-    };
-    const createRoomHandler = (newRoom: string) => {
-      setRooms((prevRooms) => [...prevRooms, newRoom]);
-    };
-    const deleteRoomHandler = (roomName: string) => {
-      setRooms((prevRooms) => prevRooms.filter((room) => room !== roomName));
-    };
 
+    ws.addEventListener('open', event => {
+      console.log('OPEN WebSocket!!');
+    });
 
-    socket.emit('room-list', roomListHandler);
-    socket.on('create-room', createRoomHandler);
-    socket.on('delete-room', deleteRoomHandler);
+    ws.addEventListener('message', event => {
+      setRooms((prevRooms) => [...prevRooms,event.data]);
+    });
 
+    ws.addEventListener('close', event => {
+      console.log('WebSocket closed, reconnecting:', event.code, event.reason);
+      // rejoin();
+    });
 
+    ws.addEventListener('error', event => {
+      console.log('WebSocket error, reconnecting:', event);
+      // rejoin();
+    });
     return () => {
-      socket.off('room-list', roomListHandler);
-      socket.off('create-room', createRoomHandler);
-      socket.off('delete-room', deleteRoomHandler);
     };
   }, []);
 
@@ -44,12 +48,9 @@ const WaitingRoom = () => {
 
     const username = prompt('닉네임 입력해 주세요.');
     if (!username) return alert('닉 입력해야합니다.');
-    localStorage.setItem(`${socket.id}`, JSON.stringify({id:socket.id, username: username}));
-
-    socket.emit('create-room', {roomName: roomName, username: username}, (response: CreateRoomResponse) => {
-      if (!response.success) return alert(response.payload);
-      navigate(`/room/${response.payload}`);
-    });
+    localStorage.setItem(`${clientId}`, JSON.stringify({id:clientId, username: username}));
+    ws.send(JSON.stringify({type: 'create-room', event: 'message', data: {owner: clientId, roomName: roomName}}));
+    navigate(`/room/${roomName}`);
   }, [navigate]);
 
 
@@ -57,11 +58,10 @@ const WaitingRoom = () => {
     (roomName: string) => () => {
       const username = prompt('사용할 닉네임 입력');
       if (!username) return alert('닉네임 입력 필수');
-      localStorage.setItem(`${socket.id}`, JSON.stringify({id:socket.id, username: username}));
+      localStorage.setItem(`${clientId}`, JSON.stringify({id:clientId, username: username}));
 
-      socket.emit('join-room', {roomName: roomName, username: username}, () => {
-        navigate(`/room/${roomName}`);
-      });
+      ws.send(JSON.stringify({type: 'join-room', event: 'message', data: {roomName: roomName, username: username}}));
+      navigate(`/room/${roomName}`);
     },
     [navigate]
   );
@@ -73,7 +73,6 @@ const WaitingRoom = () => {
         <div>채팅방 목록</div>
         <button onClick={onCreateRoom}>채팅방 생성</button>
       </Head>
-
 
       <Table>
         <thead>

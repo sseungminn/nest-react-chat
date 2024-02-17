@@ -8,7 +8,8 @@ import {
   useState,
 } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { socket } from '../../App';
+// import { ws } from '../../App';
+import { clientId } from '../waiting-room/waiting-room';
 import {
   ChatContainer,
   LeaveButton,
@@ -27,13 +28,13 @@ interface IChat {
   message: string;
 }
 
-
 const ChatRoom = () => {
+  const ws = new WebSocket(`ws://localhost:8787${window.location.pathname}`);
   const [chats, setChats] = useState<IChat[]>([]);
   const [message, setMessage] = useState<string>('');
+  const [client, setClient] = useState<UserInfo>({id:'', username:''});
   const chatContainerEl = useRef<HTMLDivElement>(null);
-  const userInfo:UserInfo = JSON.parse(localStorage.getItem(`${socket.id}`) || '');
-
+  const userInfo:UserInfo = JSON.parse(localStorage.getItem(`${clientId}`) || `{"id":"", "username":""}`);
   const { roomName } = useParams<'roomName'>();
   const navigate = useNavigate();
 
@@ -55,17 +56,32 @@ const ChatRoom = () => {
 
   // message event listener
   useEffect(() => {
-    const messageHandler = (chat: IChat) =>
+    console.log(ws);
+    setClient(userInfo);
+
+    const messageHandler = (event: MessageEvent) => {
+      console.log(event);
+      const chat: IChat = {id: client.id, username: client.username, message:event.data};
       setChats((prevChats) => [...prevChats, chat]);
+    }
 
-
-    socket.on('message', messageHandler);
+    ws.addEventListener('open', event => {
+      console.log('chat open!!');
+    });
+    
+    ws.addEventListener('message', event => {
+      const chat: IChat = {id: client.id, username: client.username, message};
+      console.log('message');
+      setChats((prevChats) => [...prevChats, chat]);
+    });
+    // ws.on('message', messageHandler);
 
 
     return () => {
-      socket.off('message', messageHandler);
+      // ws.removeEventListener('message', messageHandler);
+      // ws.off('message', messageHandler);
     };
-  }, []);
+}, []);
 
 
   const onChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
@@ -77,23 +93,31 @@ const ChatRoom = () => {
     (e: FormEvent<HTMLFormElement>) => {
       e.preventDefault();
       if (!message) return alert('메시지를 입력해 주세요.');
-
-
-      socket.emit('message', { username: userInfo.username, roomName: roomName, message: message }, (chat: IChat) => {
+      if(ws && ws.readyState === WebSocket.OPEN) {
+        const chat: IChat = { id: client.id, username: client.username, message };
+        // ws.send(JSON.stringify(chat));
+        ws.send(JSON.stringify({type:'send-message', event: 'message', data: chat}));
         setChats((prevChats) => [...prevChats, chat]);
         setMessage('');
-      });
+      }
+      // socket.emit('message', { username: userInfo.username, roomName: roomName, message: message }, (chat: IChat) => {
+      //   setChats((prevChats) => [...prevChats, chat]);
+      // });
     },
     [message, roomName]
   );
 
 
   const onLeaveRoom = useCallback(() => {
-    socket.emit('leave-room', {roomName:roomName, username: userInfo.username}, () => {
-      navigate('/');
-    });
-    localStorage.removeItem(`${socket.id}`);
-  }, [navigate, roomName]);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      const leaveInfo = { roomName, username: client.username };
+      ws.send(JSON.stringify({ type:'leave-room', event: 'message', data: {username: client.username, roomName: roomName } }));
+    }
+    // socket.emit('leave-room', {roomName:roomName, username: userInfo.username}, () => {
+      // navigate('/');
+    // });
+    localStorage.removeItem(`${clientId}`);
+  }, [roomName, navigate]);
 
 
   return (
@@ -105,16 +129,17 @@ const ChatRoom = () => {
           <MessageBox
             key={index}
             className={classNames({
-              my_message: (chat.id === userInfo.id),
+              my_message: (chat.id === client.id),
               alarm: !chat.username,
             })}
           >
             <span>
-              {chat.id
-                ? userInfo.id === chat.id
+              {chat.username}
+              {/* {chat.id
+                ? client.id === chat.id
                   ? ''
                   : chat.username
-                : ''}
+                : ''} */}
             </span>
             <Message className="message">{chat.message}</Message>
           </MessageBox>
@@ -127,6 +152,4 @@ const ChatRoom = () => {
     </>
   );
 };
-
-
 export default ChatRoom;
