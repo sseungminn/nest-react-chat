@@ -6,7 +6,7 @@ const App = () => {
   return (
     <Routes>
       <Route path="/" element={<WaitingRoom />} />
-      <Route path="/room/:roomName" element={<Chatroom />} />
+      <Route path="/room/:roomId" element={<Chatroom />} />
     </Routes>
   );
 };

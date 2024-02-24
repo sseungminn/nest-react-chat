@@ -7,8 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-// import { ws } from '../../App';
+import { useNavigate } from 'react-router-dom';
 import { clientId } from '../waiting-room/waiting-room';
 import {
   ChatContainer,
@@ -34,8 +33,8 @@ const ChatRoom = () => {
   const [message, setMessage] = useState<string>('');
   const [client, setClient] = useState<UserInfo>({id:'', username:''});
   const chatContainerEl = useRef<HTMLDivElement>(null);
-  const userInfo:UserInfo = JSON.parse(localStorage.getItem(`${clientId}`) || `{"id":"", "username":""}`);
-  const { roomName } = useParams<'roomName'>();
+  // const userInfo:UserInfo = JSON.parse(localStorage.getItem(`${clientId}`) || `{"id":"", "username":""}`);
+  const roomId = window.location.pathname.substring(6);
   const navigate = useNavigate();
 
 
@@ -56,8 +55,7 @@ const ChatRoom = () => {
 
   // message event listener
   useEffect(() => {
-    console.log(ws);
-    setClient(userInfo);
+    // setClient(userInfo);
 
     const messageHandler = (event: MessageEvent) => {
       console.log(event);
@@ -104,25 +102,24 @@ const ChatRoom = () => {
       //   setChats((prevChats) => [...prevChats, chat]);
       // });
     },
-    [message, roomName]
+    [roomId]
   );
 
 
   const onLeaveRoom = useCallback(() => {
     if (ws && ws.readyState === WebSocket.OPEN) {
-      const leaveInfo = { roomName, username: client.username };
-      ws.send(JSON.stringify({ type:'leave-room', event: 'message', data: {username: client.username, roomName: roomName } }));
+      ws.send(JSON.stringify({ type:'leave-room', event: 'message', data: {roomId: roomId} }));
     }
     // socket.emit('leave-room', {roomName:roomName, username: userInfo.username}, () => {
-      // navigate('/');
+      navigate('/');
     // });
-    localStorage.removeItem(`${clientId}`);
-  }, [roomName, navigate]);
+    // localStorage.removeItem(`${clientId}`);
+  }, [navigate]);
 
 
   return (
     <>
-      <h1>Chat Room: {roomName}</h1>
+      <h1>Chat Room: {roomId}</h1>
       <LeaveButton onClick={onLeaveRoom}>방 나가기</LeaveButton>
       <ChatContainer ref={chatContainerEl}>
         {chats.map((chat, index) => (

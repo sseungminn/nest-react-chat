@@ -1,21 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Head, Table } from './waiting-room.styles';
-// import { ws } from '../../App';
 import uuid from 'react-uuid';
 
 interface User {
-  websocket: WebSocket;
   id: string;
-  city: string | undefined;
-  country: string;
+  username: string;
+}
+
+interface Room {
+  roomId: string;
+  roomName: string;
 }
 export const clientId = uuid();
 
 
 const WaitingRoom = () => {
   const ws = new WebSocket('ws://localhost:8787');
-  const [rooms, setRooms] = useState<string[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -25,7 +28,12 @@ const WaitingRoom = () => {
     });
 
     ws.addEventListener('message', event => {
-      setRooms((prevRooms) => [...prevRooms,event.data]);
+      console.log('111',event);
+      const parsedData = JSON.parse(event.data);
+      if(parsedData){
+        // setRooms((prevRooms) => [...prevRooms, parsedData]);
+        setRooms(parsedData);
+      }
     });
 
     ws.addEventListener('close', event => {
@@ -39,33 +47,43 @@ const WaitingRoom = () => {
     });
     return () => {
     };
-  }, []);
+  }, [navigate]);
 
 
   const onCreateRoom = useCallback(() => {
+    const roomId = uuid();
     const roomName = prompt('생성할 방 이름 입력');
     if (!roomName) return alert('방 이름 입력 필수');
 
     const username = prompt('닉네임 입력해 주세요.');
     if (!username) return alert('닉 입력해야합니다.');
-    localStorage.setItem(`${clientId}`, JSON.stringify({id:clientId, username: username}));
-    ws.send(JSON.stringify({type: 'create-room', event: 'message', data: {owner: clientId, roomName: roomName}}));
-    navigate(`/room/${roomName}`);
+    // localStorage.setItem(`${clientId}`, JSON.stringify({id:clientId, username: username}));
+    const targetUsers:(User|undefined)[] = users.map(user => {
+      if(user.id === clientId && user.username ==='') {
+        return {...user, username: username};
+      }
+    });
+    if(!targetUsers){
+      setUsers(targetUsers);
+    }
+    // ws.send(JSON.stringify({type: 'create-room', event: 'message', data: {roomId: roomId, roomName: roomName, username: username}}));
+    // rooms.concat([{roomId: roomId, roomName: roomName}])
+    ws.send(JSON.stringify({type: 'create-room', event: 'message', data: rooms.concat([{roomId: roomId, roomName: roomName}])}));
+    // setRooms(rooms.concat([{roomId: roomId, roomName: roomName}]));
+    navigate(`/room/${roomId}`);
   }, [navigate]);
 
-
   const onJoinRoom = useCallback(
-    (roomName: string) => () => {
+    (roomId: string, roomName: string) => () => {
       const username = prompt('사용할 닉네임 입력');
       if (!username) return alert('닉네임 입력 필수');
-      localStorage.setItem(`${clientId}`, JSON.stringify({id:clientId, username: username}));
+      // localStorage.setItem(`${clientId}`, JSON.stringify({id:clientId, username: username}));
 
-      ws.send(JSON.stringify({type: 'join-room', event: 'message', data: {roomName: roomName, username: username}}));
-      navigate(`/room/${roomName}`);
+      ws.send(JSON.stringify({type: 'join-room', event: 'message', data: {roomId: roomId, roomName: roomName, username: username}}));
+      navigate(`/room/${roomId}`);
     },
     [navigate]
   );
-
 
   return (
     <>
@@ -84,11 +102,11 @@ const WaitingRoom = () => {
         </thead>
         <tbody>
           {rooms.map((room, index) => (
-            <tr key={room}>
+            <tr key={index}>
               <td>{index + 1}</td>
-              <td>{room}</td>
+              <td>{room.roomName}</td>
               <td>
-                <button onClick={onJoinRoom(room)}>입장하기</button>
+                <button onClick={onJoinRoom(room.roomId, room.roomName)}>입장하기</button>
               </td>
             </tr>
           ))}
